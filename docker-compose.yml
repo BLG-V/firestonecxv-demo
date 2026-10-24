@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DEMO_DB_PATH: /srv/data/demo.sqlite3
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-qwen3.8-flash}
+      DEMO_VERIFICATION_TOKEN: ${DEMO_VERIFICATION_TOKEN:-}
+      DEMO_REQUIRE_VERIFICATION_TOKEN: ${DEMO_REQUIRE_VERIFICATION_TOKEN:-true}
+    volumes:
+      - demo_data:/srv/data
+    expose:
+      - "8000"
+
+  frontend:
+    restart: unless-stopped
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:80"
+
+volumes:
+  demo_data:

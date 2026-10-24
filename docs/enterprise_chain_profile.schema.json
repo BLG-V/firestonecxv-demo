@@ -1,0 +1,642 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/schemas/enterprise-chain-profile.schema.json",
+  "title": "企业产业链融合数据契约",
+  "description": "离线 Demo 与 P3/P6 共用的数据契约。可直接用本 Schema 的 oneOf 校验完整对象，也可用 #/definitions/ChainMatchResult、#/definitions/EnterpriseChainProfile、#/definitions/ScoreSnapshot 或 #/definitions/Explanation 分别校验。Schema 不能代替调用侧的环节白名单、证据原文回查及全量因子求和复算。",
+  "oneOf": [
+    { "$ref": "#/definitions/ChainMatchResult" },
+    { "$ref": "#/definitions/EnterpriseChainProfile" },
+    { "$ref": "#/definitions/ScoreSnapshot" },
+    { "$ref": "#/definitions/Explanation" },
+    { "$ref": "#/definitions/SegmentGapAnalysis" },
+    { "$ref": "#/definitions/ChainHealth" },
+    { "$ref": "#/definitions/VerificationSubmission" },
+    { "$ref": "#/definitions/LeadFeedback" }
+  ],
+  "definitions": {
+    "SignalType": {
+      "type": "string",
+      "enum": ["scope", "product", "patent", "qualify", "supply", "finance", "text", "cert"],
+      "description": "信号类型：经营范围/产品目录/专利/资质/供应链/融资/文本语义/行政许可"
+    },
+    "MatchLevel": {
+      "type": "string",
+      "enum": ["primary", "secondary", "potential"],
+      "description": "primary 现有主营；secondary 现有次要；potential 未来可能进入（仅可由募投/融资用途/新设子公司/新增专利方向支撑）"
+    },
+    "MatchMethod": {
+      "type": "string",
+      "enum": ["rule", "semantic", "hybrid", "model", "manual"]
+    },
+    "ScoreKind": {
+      "type": "string",
+      "enum": ["rule_score", "calibrated_probability", "manual"],
+      "description": "rule_score 为未经概率校准的演示匹配分；只有经过独立校准和验证的模型输出才可标记 calibrated_probability；manual 表示人工核验定位。"
+    },
+    "VerificationStatus": {
+      "type": "string",
+      "enum": ["candidate", "confirmed", "rejected"]
+    },
+    "Grade": {
+      "type": "string",
+      "enum": ["S", "A", "B", "C"],
+      "description": "S≥85 重点招引；A 70~85 主动对接；B 55~70 储备跟踪；C <55 观察"
+    },
+    "DecisionType": {
+      "type": "string",
+      "enum": ["invest_promotion", "cooperation", "tracking"]
+    },
+    "Direction": {
+      "type": "string",
+      "enum": ["positive", "negative", "neutral"]
+    },
+    "GapLevel": {
+      "type": "string",
+      "enum": ["none", "low", "mid", "high", "critical"]
+    },
+
+    "Evidence": {
+      "type": "object",
+      "description": "单条证据。field_value 必须是输入数据中的逐字原文片段，禁止改写、翻译、概括、补全。",
+      "required": ["field_path", "field_value", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "field_path": {
+          "type": "string",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*|\\[\\d+\\])*$",
+          "description": "精确到输入字段路径，如 enterprise.business_scope、enterprise.patents[3].abstract",
+          "examples": ["enterprise.business_scope", "enterprise.qualifications[0].name", "segment_value_profile.gap_level"]
+        },
+        "field_value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "原文片段，逐字引用"
+        },
+        "matched_term": {
+          "type": ["string", "null"],
+          "maxLength": 128,
+          "description": "命中的环节关键词或分类码"
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "数据来源系统，如 工商登记、信用中国、国家知识产权局、自然资源局公示"
+        },
+        "as_of": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "该证据本身的时间，区别于记录写入时间"
+        },
+        "weight": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "该证据的贡献权重"
+        }
+      }
+    },
+
+    "ChainMatch": {
+      "type": "object",
+      "description": "单条环节归属判定",
+      "required": ["chain_id", "segment_id", "segment_name", "match_level", "confidence", "score_kind", "signal_types", "evidence", "exclusion_reasoning", "confidence_rationale"],
+      "additionalProperties": false,
+      "properties": {
+        "chain_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "segment_id": { "type": "string", "minLength": 1, "maxLength": 64, "description": "必须在环节目录白名单内，禁止自创" },
+        "segment_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "product_id": { "type": ["string", "null"], "maxLength": 64, "description": "粒度到产品时填写" },
+        "match_level": { "$ref": "#/definitions/MatchLevel" },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "匹配强度数值；score_kind=rule_score 时不是概率，不能按概率阈值解释。match_level 另行依据现有业务或未来进入信号确定。"
+        },
+        "score_kind": { "$ref": "#/definitions/ScoreKind" },
+        "signal_types": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SignalType" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Evidence" },
+          "minItems": 2,
+          "maxItems": 10,
+          "description": "至少 2 条。不足 2 条整条 match 丢弃。"
+        },
+        "exclusion_reasoning": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 500,
+          "description": "显式说明为何排除相邻易混淆环节，如判定锂电池制造时须说明为何排除锂电设备制造与锂电池回收"
+        },
+        "confidence_rationale": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 500,
+          "description": "匹配依据与弱证据说明；规则分不声称概率校准。"
+        }
+      }
+    },
+
+    "ChainMatchResult": {
+      "type": "object",
+      "title": "P3 输出：LLM 辅助映射与证据抽取结果",
+      "required": ["enterprise_id", "matches", "abstain"],
+      "additionalProperties": false,
+      "properties": {
+        "enterprise_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "matches": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ChainMatch" },
+          "maxItems": 5,
+          "description": "按匹配分降序，最多 5 条。abstain=true 时必须为空数组。"
+        },
+        "abstain": {
+          "type": "boolean",
+          "description": "弃权标记。弃权是正确行为，硬猜是错误行为。"
+        },
+        "abstain_reason": {
+          "type": ["string", "null"],
+          "maxLength": 300,
+          "description": "弃权原因，abstain=true 时必填"
+        },
+        "missing_signals": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 128 },
+          "maxItems": 10,
+          "description": "缺少什么信号才能判断，abstain=true 时必填"
+        },
+        "data_quality_notes": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 200 },
+          "maxItems": 10,
+          "description": "输入数据质量问题，如字段过期、经营范围过于宽泛、名称与实际业务不符"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "abstain": { "const": true } } },
+          "then": {
+            "properties": {
+              "matches": { "maxItems": 0 },
+              "abstain_reason": { "type": "string", "minLength": 5 },
+              "missing_signals": { "minItems": 1 }
+            },
+            "required": ["abstain_reason", "missing_signals"]
+          }
+        },
+        {
+          "if": { "properties": { "abstain": { "const": false } } },
+          "then": { "properties": { "matches": { "minItems": 1 } } }
+        }
+      ]
+    },
+
+    "FactorDriver": {
+      "type": "object",
+      "description": "页面展示的 Top 6 驱动因子，必须存在于 score_snapshot.factor_breakdown 中；不得把此展示子集当成复算输入。",
+      "required": ["factor_name", "contribution", "direction", "human_readable_explanation", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "factor_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "必须与 factor_breakdown 中的 factor_name 完全一致",
+          "examples": ["环节稀缺度", "环节战略重要性", "企业创新竞争力", "扩张信号-新增用地", "风险折减-行政处罚"]
+        },
+        "contribution": {
+          "type": "number",
+          "minimum": -100,
+          "maximum": 100,
+          "description": "展示因子的贡献值，正负均可。总分必须由完整 score_snapshot.factor_breakdown 的贡献值加 baseline 复算（误差 ≤0.1），不能只加总 Top 6。"
+        },
+        "direction": { "$ref": "#/definitions/Direction" },
+        "raw_value": { "type": ["number", "string", "null"], "description": "原始值，直接取自 factor_breakdown" },
+        "normalized_value": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "weight": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "human_readable_explanation": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 300,
+          "description": "业务语言解释。正确示例：本地该环节仅 3 家企业，属高缺口环节，招商价值显著。错误示例：R 维度分位数 0.92。"
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Evidence" },
+          "minItems": 1,
+          "maxItems": 5,
+          "description": "field_value 必须等于 factor_breakdown 中对应的 source_value 原文"
+        }
+      }
+    },
+
+    "VetoHit": {
+      "type": "object",
+      "required": ["rule_id", "rule_name", "detail", "impact"],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": { "type": "string", "maxLength": 64 },
+        "rule_name": { "type": "string", "minLength": 1, "maxLength": 128, "examples": ["失信被执行人", "重大环保处罚未整改结案", "实际控制人涉刑事案件", "股权司法冻结超50%", "本地招商黑名单", "核心数据超期18个月"] },
+        "detail": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "impact": { "type": "string", "minLength": 1, "maxLength": 200, "description": "对档位的具体影响，如 档位封顶C、不给档位仅输出数据待更新" },
+        "evidence": { "type": "array", "items": { "$ref": "#/definitions/Evidence" }, "minItems": 1, "maxItems": 5 }
+      }
+    },
+
+    "Explanation": {
+      "type": "object",
+      "title": "P6 输出：归因链（结论 → 因子 → 字段 → 证据 四段式）",
+      "description": "可通过 #/definitions/Explanation 单独校验。drivers 是展示用 Top 6；调用侧须用 ScoreSnapshot.factor_breakdown 全量复算，并核对 vetoes、data_gaps 与快照一致。",
+      "required": ["conclusion", "score_summary", "drivers", "vetoes", "data_gaps", "suggested_actions", "next_check_point"],
+      "additionalProperties": false,
+      "properties": {
+        "conclusion": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 200,
+          "description": "一句话结论；命中否决项时不得宣称高于 C，数据待更新时不得虚构档位。"
+        },
+        "score_summary": {
+          "type": "object",
+          "required": ["score", "baseline", "rank_in_segment", "rank_total", "summary_text"],
+          "additionalProperties": false,
+          "properties": {
+            "score": { "type": "number", "minimum": 0, "maximum": 200 },
+            "baseline": { "type": "number", "minimum": 0, "maximum": 200 },
+            "rank_in_segment": { "type": ["integer", "null"], "minimum": 1 },
+            "rank_total": { "type": ["integer", "null"], "minimum": 1 },
+            "summary_text": { "type": "string", "minLength": 10, "maxLength": 300, "description": "一句话说明高于/低于基准的主因" }
+          }
+        },
+        "drivers": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/FactorDriver" },
+          "maxItems": 6,
+          "description": "仅供页面解释，按 |contribution| 降序取 Top 6；未展示的因子仍参与全量求和复算。"
+        },
+        "vetoes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/VetoHit" },
+          "maxItems": 10,
+          "description": "未命中则为空数组。非空时必须显式展示，禁止折叠隐藏。"
+        },
+        "data_gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["missing_field", "impact"],
+            "additionalProperties": false,
+            "properties": {
+              "missing_field": { "type": "string", "minLength": 1, "maxLength": 128, "examples": ["2025年营业收入", "海关进出口数据", "供应链客户名单"] },
+              "impact": { "type": "string", "minLength": 1, "maxLength": 200, "description": "该缺口对结论置信度的影响方向" },
+              "affected_factors": { "type": "array", "items": { "type": "string", "maxLength": 64 }, "maxItems": 5 }
+            }
+          },
+          "description": "必须全部保留输入中的 data_gaps，禁止删减或美化"
+        },
+        "suggested_actions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 5, "maxLength": 200 },
+          "maxItems": 3,
+          "description": "必须与档位匹配且可执行。禁止无数据支撑的承诺性表述。"
+        },
+        "next_check_point": {
+          "type": "object",
+          "required": ["suggested_date", "trigger_conditions"],
+          "additionalProperties": false,
+          "properties": {
+            "suggested_date": { "type": "string", "format": "date" },
+            "trigger_conditions": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "minItems": 1, "maxItems": 5, "description": "如 出现新一轮融资、新增用地公示、风险状态变更" }
+          }
+        },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+
+    "ExpansionSignal": {
+      "type": "object",
+      "required": ["signal_type", "weight", "occurred_at", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "signal_type": { "type": "string", "enum": ["land_use", "env_impact", "construction_permit", "new_branch", "outbound_investment", "financing", "relocation_intent", "hiring_surge", "patent_new_region"] },
+        "weight": { "type": "number", "minimum": 0, "maximum": 0.3 },
+        "occurred_at": { "type": "string", "format": "date" },
+        "source": { "type": "string", "maxLength": 64 },
+        "event_id": { "type": ["string", "null"], "maxLength": 64, "description": "原始事件记录ID，必须可下钻" },
+        "detail": { "type": "string", "maxLength": 300 }
+      }
+    },
+
+    "FactorBreakdownItem": {
+      "type": "object",
+      "description": "评分快照中的单个因子。解释层只读此快照，不做二次计算。",
+      "required": ["factor_name", "contribution", "direction", "source_field"],
+      "additionalProperties": false,
+      "properties": {
+        "factor_name": { "type": "string", "maxLength": 64 },
+        "dimension": { "type": "string", "enum": ["strategic", "value_added", "scarcity", "growth", "scale", "innovation", "capital", "qualification", "supply_chain", "expansion", "carrier_match", "risk"], "description": "SV四维 / CF五维 / LP扩张 / FM载体 / RD风险" },
+        "raw_value": { "type": ["number", "string", "null"] },
+        "normalized_value": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "normalization_method": { "type": ["string", "null"], "enum": ["quantile_same_region_industry", "quantile_same_chain", "quantile_national", "enum_mapping", "tiered_deduction", null], "description": "分位数归一时需处理样本不足回退，回退行为记入 data_quality_notes" },
+        "weight": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "contribution": { "type": "number" },
+        "direction": { "$ref": "#/definitions/Direction" },
+        "source_field": { "type": "string", "maxLength": 256 },
+        "source_value": { "type": ["string", "number", "null"], "maxLength": 500 },
+        "source": { "type": ["string", "null"], "maxLength": 64 },
+        "as_of": { "type": ["string", "null"], "format": "date" },
+        "config_version": { "type": ["string", "null"], "maxLength": 32, "description": "权重配置版本，保证可复现" }
+      }
+    },
+
+    "ScoreSnapshot": {
+      "type": "object",
+      "title": "评分快照（P6 的唯一输入）",
+      "description": "可通过 #/definitions/ScoreSnapshot 单独校验；P6 输入须含全量 factor_breakdown、vetoes 和 data_gaps，不能只传展示 Top 6。调用侧检查 baseline + Σ全部 contribution = icv_score（误差 ≤0.1）。",
+      "required": ["enterprise_id", "chain_id", "period", "region_code", "decision_status", "icv_score", "baseline", "factor_breakdown", "vetoes", "data_gaps", "data_stale", "data_as_of"],
+      "additionalProperties": false,
+      "properties": {
+        "enterprise_id": { "type": "string", "maxLength": 64 },
+        "enterprise_name": { "type": "string", "maxLength": 200 },
+        "chain_id": { "type": "string", "maxLength": 64 },
+        "period": { "type": "string", "pattern": "^\\d{4}-\\d{2}$", "examples": ["2026-09"] },
+        "region_code": { "type": "string", "maxLength": 12 },
+        "segment_sv": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "firm_cf": { "type": ["number", "null"], "minimum": 0.4, "maximum": 1.6 },
+        "risk_rd": { "type": ["number", "null"], "minimum": 0.5, "maximum": 1.0 },
+        "decision_status": { "type": "string", "enum": ["scored", "vetoed", "data_pending"], "description": "scored 正常给档位；vetoed 否决项优先；data_pending 因弃权、缺数据或过期不给档位。" },
+        "icv_score": { "type": ["number", "null"], "minimum": 0, "maximum": 200 },
+        "baseline": { "type": ["number", "null"], "minimum": 0, "maximum": 200 },
+        "rank_in_segment": { "type": ["integer", "null"], "minimum": 1 },
+        "rank_total": { "type": ["integer", "null"], "minimum": 1 },
+        "decision_type": { "$ref": "#/definitions/DecisionType" },
+        "grade": { "anyOf": [{ "$ref": "#/definitions/Grade" }, { "type": "null" }] },
+        "attractiveness": { "type": ["number", "null"], "minimum": 0, "maximum": 200 },
+        "landing_prob": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "carrier_match": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "expansion_signals": { "type": "array", "items": { "$ref": "#/definitions/ExpansionSignal" }, "maxItems": 20 },
+        "factor_breakdown": { "type": "array", "items": { "$ref": "#/definitions/FactorBreakdownItem" }, "description": "完整因子集合。复算时使用本数组全部元素；不能只取解释层 Top 6。" },
+        "vetoes": { "type": "array", "items": { "$ref": "#/definitions/VetoHit" }, "maxItems": 10, "description": "P6 必须直接接收并逐项保留命中的否决项。" },
+        "data_gaps": { "type": "array", "items": { "type": "string", "maxLength": 128 } },
+        "data_stale": { "type": "boolean", "description": "核心数据超过时效阈值时为 true；此时 decision_status 必须为 data_pending，grade 必须为 null。" },
+        "data_as_of": { "type": "string", "format": "date", "description": "核心字段超期 18 个月时不得给出档位，仅输出 数据待更新" },
+        "model_version": { "type": ["string", "null"], "maxLength": 32 },
+        "config_version": { "type": ["string", "null"], "maxLength": 32 },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      },
+      "allOf": [
+        { "if": { "properties": { "decision_status": { "const": "scored" } } }, "then": { "properties": { "icv_score": { "type": "number" }, "baseline": { "type": "number" }, "grade": { "$ref": "#/definitions/Grade" }, "factor_breakdown": { "minItems": 1 }, "vetoes": { "maxItems": 0 }, "data_stale": { "const": false } }, "required": ["grade"] } },
+        { "if": { "properties": { "decision_status": { "const": "vetoed" } } }, "then": { "properties": { "grade": { "enum": ["C", null] }, "vetoes": { "minItems": 1 }, "data_stale": { "const": false } }, "required": ["grade"] } },
+        { "if": { "properties": { "decision_status": { "const": "data_pending" } } }, "then": { "properties": { "grade": { "type": "null" }, "data_gaps": { "minItems": 1 } }, "required": ["grade"] } },
+        { "if": { "properties": { "data_stale": { "const": true } } }, "then": { "properties": { "decision_status": { "const": "data_pending" } } } }
+      ]
+    },
+
+    "EnterpriseChainProfile": {
+      "type": "object",
+      "title": "融合卡片完整响应（GET /api/v1/enterprises/{id}/chain-profile）",
+      "description": "一次请求返回四段信息：在哪 / 值多少 / 该不该动 / 凭什么。可通过 #/definitions/EnterpriseChainProfile 单独校验；弃权或缺数据时后三段可为 null，不得用 0 分或 C 档伪装未知。",
+      "required": ["enterprise_id", "where", "worth", "decision", "decision_status", "explanation", "data_gaps", "data_stale", "data_as_of"],
+      "additionalProperties": false,
+      "properties": {
+        "enterprise_id": { "type": "string", "maxLength": 64 },
+        "enterprise_name": { "type": "string", "maxLength": 200 },
+        "where": {
+          "type": "object",
+          "description": "在哪：所属链与环节",
+          "required": ["positions", "abstained"],
+          "additionalProperties": false,
+          "properties": {
+            "positions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["position_id", "chain_id", "chain_name", "segment_id", "segment_name", "match_level", "match_score", "score_kind", "status", "evidence"],
+                "additionalProperties": false,
+                "properties": {
+                  "position_id": { "type": "integer", "minimum": 1, "description": "稳定的持久化位置 ID，供 VerificationSubmission.position_id 指向。" },
+                  "chain_id": { "type": "string", "maxLength": 64 },
+                  "chain_name": { "type": "string", "maxLength": 128 },
+                  "segment_id": { "type": "string", "maxLength": 64 },
+                  "segment_name": { "type": "string", "maxLength": 128 },
+                  "product_id": { "type": ["string", "null"], "maxLength": 64 },
+                  "product_name": { "type": ["string", "null"], "maxLength": 128 },
+                  "match_level": { "$ref": "#/definitions/MatchLevel" },
+                  "match_score": { "type": "number", "minimum": 0, "maximum": 1, "description": "匹配强度；score_kind=rule_score 时未经概率校准，不能称为命中概率。低分候选前端应视觉降级。" },
+                  "score_kind": { "$ref": "#/definitions/ScoreKind" },
+                  "match_method": { "$ref": "#/definitions/MatchMethod" },
+                  "status": { "$ref": "#/definitions/VerificationStatus" },
+                  "verified_by": { "type": ["string", "null"], "maxLength": 64 },
+                  "verified_at": { "type": ["string", "null"], "format": "date-time" },
+                  "evidence": { "type": "array", "items": { "$ref": "#/definitions/Evidence" }, "minItems": 1, "maxItems": 10 }
+                }
+              },
+              "maxItems": 10
+            },
+            "abstained": { "type": "boolean", "description": "是否弃权。弃权时 positions 为空数组，前端显示 暂未获取 而非 无归属" },
+            "abstain_reason": { "type": ["string", "null"], "maxLength": 300 },
+            "missing_signals": { "type": "array", "items": { "type": "string", "maxLength": 128 }, "maxItems": 10 }
+          },
+          "allOf": [
+            { "if": { "properties": { "abstained": { "const": true } } }, "then": { "properties": { "positions": { "maxItems": 0 }, "abstain_reason": { "type": "string", "minLength": 5 }, "missing_signals": { "minItems": 1 } }, "required": ["abstain_reason", "missing_signals"] } },
+            { "if": { "properties": { "abstained": { "const": false } } }, "then": { "properties": { "positions": { "minItems": 1 } } } }
+          ]
+        },
+        "worth": {
+          "type": ["object", "null"],
+          "description": "值多少：产业链价值分",
+          "required": ["icv_score"],
+          "additionalProperties": false,
+          "properties": {
+            "icv_score": { "type": "number", "minimum": 0, "maximum": 200 },
+            "segment_sv": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+            "sv_dimensions": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "strategic": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+                "value_added": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+                "scarcity": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+                "growth": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
+              },
+              "description": "前端渲染为四维雷达图"
+            },
+            "firm_cf": { "type": ["number", "null"], "minimum": 0.4, "maximum": 1.6 },
+            "risk_rd": { "type": ["number", "null"], "minimum": 0.5, "maximum": 1.0 },
+            "rank_in_segment": { "type": ["integer", "null"], "minimum": 1 },
+            "rank_total": { "type": ["integer", "null"], "minimum": 1 },
+            "period": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}$" },
+            "baseline": { "type": "number", "minimum": 0, "maximum": 200 },
+            "factor_breakdown": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/FactorBreakdownItem" },
+              "minItems": 1,
+              "description": "全量评分因子账本。基准分加全部贡献必须复算 icv_score；界面解释 drivers 只展示 Top 6。"
+            },
+            "config_version": { "type": ["string", "null"], "maxLength": 32 }
+          }
+        },
+        "decision": {
+          "type": ["object", "null"],
+          "description": "该不该动：档位与建议",
+          "required": ["grade"],
+          "additionalProperties": false,
+          "properties": {
+            "decision_type": { "anyOf": [{ "$ref": "#/definitions/DecisionType" }, { "type": "null" }] },
+            "grade": { "anyOf": [{ "$ref": "#/definitions/Grade" }, { "type": "null" }] },
+            "attractiveness": { "type": ["number", "null"], "minimum": 0, "maximum": 200 },
+            "landing_prob": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "carrier_match": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "carrier_match_detail": { "type": ["string", "null"], "maxLength": 500 },
+            "expansion_signals": { "type": "array", "items": { "$ref": "#/definitions/ExpansionSignal" }, "maxItems": 20 },
+            "vetoes": { "type": "array", "items": { "$ref": "#/definitions/VetoHit" }, "maxItems": 10 }
+          }
+        },
+        "decision_status": { "type": "string", "enum": ["scored", "vetoed", "data_pending"], "description": "scored 可给档位；vetoed 否决优先；data_pending 因弃权、缺数据或过期不给档位。" },
+        "explanation": { "anyOf": [{ "$ref": "#/definitions/Explanation" }, { "type": "null" }] },
+        "data_gaps": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 128 }, "description": "缺数据或过期原因；即使 explanation 为 null 也须可展示。" },
+        "data_stale": { "type": "boolean", "description": "核心字段超期时为 true；必须为 data_pending，不能伪装成 C 档。" },
+        "data_as_of": { "type": "string", "format": "date" },
+        "model_version": { "type": ["string", "null"], "maxLength": 32 },
+        "config_version": { "type": ["string", "null"], "maxLength": 32 },
+        "data_mode": { "type": "string", "enum": ["synthetic", "production"] },
+        "trace_id": { "type": ["string", "null"], "maxLength": 64 }
+      },
+      "allOf": [
+        { "if": { "properties": { "decision_status": { "const": "scored" } } }, "then": { "properties": { "where": { "properties": { "positions": { "contains": { "type": "object", "properties": { "match_level": { "enum": ["primary", "secondary"] }, "status": { "const": "confirmed" } }, "required": ["match_level", "status"] } } } }, "worth": { "type": "object" }, "decision": { "type": "object", "properties": { "grade": { "$ref": "#/definitions/Grade" }, "decision_type": { "$ref": "#/definitions/DecisionType" }, "vetoes": { "maxItems": 0 } }, "required": ["grade", "decision_type"] }, "explanation": { "$ref": "#/definitions/Explanation" }, "data_stale": { "const": false } } } },
+        { "if": { "properties": { "decision_status": { "const": "vetoed" } } }, "then": { "properties": { "decision": { "type": "object", "properties": { "grade": { "enum": ["C", null] }, "vetoes": { "minItems": 1 } }, "required": ["vetoes"] }, "data_stale": { "const": false } } } },
+        { "if": { "properties": { "decision_status": { "const": "data_pending" } } }, "then": { "properties": { "decision": { "anyOf": [{ "type": "null" }, { "type": "object", "properties": { "grade": { "type": "null" } } }] } } } },
+        { "if": { "properties": { "data_stale": { "const": true } } }, "then": { "properties": { "decision_status": { "const": "data_pending" }, "data_gaps": { "minItems": 1 } } } },
+        { "if": { "properties": { "where": { "type": "object", "properties": { "abstained": { "const": true } }, "required": ["abstained"] } }, "required": ["where"] }, "then": { "properties": { "decision_status": { "const": "data_pending" } } } }
+      ]
+    },
+
+    "SegmentGapAnalysis": {
+      "type": "object",
+      "title": "环节缺口分析（GET /api/v1/segments/{id}/gap-analysis）",
+      "required": ["segment_id", "region_code", "period", "local_firm_count", "gap_level"],
+      "additionalProperties": false,
+      "properties": {
+        "segment_id": { "type": "string", "maxLength": 64 },
+        "segment_name": { "type": "string", "maxLength": 128 },
+        "region_code": { "type": "string", "maxLength": 12 },
+        "period": { "type": "string", "pattern": "^\\d{4}-\\d{2}$" },
+        "local_firm_count": { "type": "integer", "minimum": 0 },
+        "local_leader_count": { "type": "integer", "minimum": 0, "description": "本地链主/龙头数" },
+        "expected_firm_count": { "type": ["integer", "null"], "minimum": 0, "description": "按同类区域基准推算的应有企业数" },
+        "gap_level": { "$ref": "#/definitions/GapLevel" },
+        "missing_tiers": { "type": "array", "items": { "type": "string", "maxLength": 64 }, "description": "缺什么档次，如 缺链主级、缺中试配套、缺回收利用" },
+        "cross_region_candidates": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "required": ["enterprise_id", "enterprise_name", "home_region", "icv_score", "attractiveness", "grade"],
+            "additionalProperties": false,
+            "properties": {
+              "enterprise_id": { "type": "string", "maxLength": 64 },
+              "enterprise_name": { "type": "string", "maxLength": 200 },
+              "home_region": { "type": "string", "maxLength": 64 },
+              "icv_score": { "type": "number" },
+              "attractiveness": { "type": ["number", "null"] },
+              "grade": { "$ref": "#/definitions/Grade" },
+              "has_expansion_signal": { "type": "boolean" },
+              "top_reason": { "type": ["string", "null"], "maxLength": 200 }
+            }
+          },
+          "description": "可从哪里补：跨区域候选企业 Top-N"
+        },
+        "data_as_of": { "type": "string", "format": "date" }
+      }
+    },
+
+    "ChainHealth": {
+      "type": "object",
+      "title": "链条健康度（GET /api/v1/chains/{id}/health）",
+      "required": ["chain_id", "region_code", "period", "segments"],
+      "additionalProperties": false,
+      "properties": {
+        "chain_id": { "type": "string", "maxLength": 64 },
+        "chain_name": { "type": "string", "maxLength": 128 },
+        "region_code": { "type": "string", "maxLength": 12 },
+        "period": { "type": "string", "pattern": "^\\d{4}-\\d{2}$" },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["segment_id", "segment_name", "health_status", "local_firm_count"],
+            "additionalProperties": false,
+            "properties": {
+              "segment_id": { "type": "string", "maxLength": 64 },
+              "segment_name": { "type": "string", "maxLength": 128 },
+              "upstream_segment_ids": { "type": "array", "items": { "type": "string", "maxLength": 64 } },
+              "health_status": { "type": "string", "enum": ["broken", "weak", "strong"], "description": "断链(本地为空,红) / 弱链(仅有低竞争力企业,黄) / 强链(有链主,绿)。前端不得仅用色彩承载信息，需同时显示文字。" },
+              "local_firm_count": { "type": "integer", "minimum": 0 },
+              "has_leader": { "type": "boolean" },
+              "avg_icv": { "type": ["number", "null"] },
+              "segment_sv": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+              "gap_level": { "$ref": "#/definitions/GapLevel" }
+            }
+          }
+        },
+        "summary": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "broken_count": { "type": "integer", "minimum": 0 },
+            "weak_count": { "type": "integer", "minimum": 0 },
+            "strong_count": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "data_as_of": { "type": "string", "format": "date" }
+      }
+    },
+
+    "VerificationSubmission": {
+      "type": "object",
+      "title": "人工核验提交（POST /api/v1/verifications）",
+      "description": "Demo 以企业环节定位为核验粒度；逐条证据标注统计不在当前范围内。",
+      "required": ["position_id", "action", "operator", "idempotency_key"],
+      "additionalProperties": false,
+      "properties": {
+        "position_id": { "type": "integer", "minimum": 1 },
+        "action": { "type": "string", "enum": ["confirm", "correct", "reject"] },
+        "corrected_segment_id": { "type": ["string", "null"], "maxLength": 64, "description": "action=correct 时必填" },
+        "corrected_chain_id": { "type": ["string", "null"], "maxLength": 64 },
+        "reason": { "type": ["string", "null"], "maxLength": 500 },
+        "operator": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 64 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "action": { "const": "correct" } } },
+          "then": { "required": ["corrected_segment_id"] }
+        }
+      ]
+    },
+
+    "LeadFeedback": {
+      "type": "object",
+      "title": "线索反馈（POST /api/v1/leads/{id}/feedback）",
+      "required": ["enterprise_id", "region_code", "decision_type", "outcome", "operator"],
+      "additionalProperties": false,
+      "properties": {
+        "enterprise_id": { "type": "string", "maxLength": 64 },
+        "region_code": { "type": "string", "maxLength": 12 },
+        "period": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}$" },
+        "decision_type": { "$ref": "#/definitions/DecisionType" },
+        "outcome": { "type": "string", "enum": ["adopt", "reject", "pending"], "description": "采纳率与误报率评测的直接数据源" },
+        "reject_reason_code": { "type": ["string", "null"], "maxLength": 64, "enum": ["data_wrong", "segment_wrong", "risk_missed", "no_landing_intent", "carrier_mismatch", "already_contacted", "policy_mismatch", "other", null] },
+        "comment": { "type": ["string", "null"], "maxLength": 1000 },
+        "operator": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "idempotency_key": { "type": ["string", "null"], "maxLength": 64 }
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "version": "demo-1",
+  "demo_as_of": "2026-10-23",
+  "chain": {"id": "nev", "name": "新能源汽车产业链"},
+  "region": {"code": "DEMO-REGION", "name": "示范区域（虚构）"},
+  "period": "2026-10",
+  "minimum_evidence": 2,
+  "stale_months": 18,
+  "position_weights": {"primary": 0.7, "secondary": 0.2},
+  "match_signal_weights": {"business_scope": 0.25, "products": 0.5, "patents": 0.35, "qualifications": 0.45, "announcements": 0.25, "financing_uses": 0.25},
+  "sv_weights": {"strategic": 0.3, "value_added": 0.25, "scarcity": 0.25, "growth": 0.2},
+  "cf_weights": {"scale": 0.2, "innovation": 0.2, "capital": 0.2, "qualification": 0.2, "supply_chain": 0.2},
+  "fm_weights": {"supplier_gap": 0.4, "carrier": 0.3, "policy": 0.3},
+  "lp_signal_weights": {"land_use": 0.3, "env_impact": 0.3, "construction_permit": 0.3, "new_branch": 0.25, "outbound_investment": 0.25, "financing": 0.2, "relocation_intent": 0.2, "hiring_surge": 0.15, "patent_new_region": 0.1},
+  "risk_rd": {"dishonest": 0.5, "environment_unresolved": 0.6, "executed": 0.9, "operating_abnormal": 0.9, "major_litigation": 0.85},
+  "veto_rules": [
+    {"rule_id": "dishonest", "rule_name": "失信被执行人", "impact": "档位封顶C"},
+    {"rule_id": "environment_unresolved", "rule_name": "重大环保处罚未整改", "impact": "档位封顶C"}
+  ],
+  "grade_thresholds": {"S": 85, "A": 70, "B": 55},
+  "segments": [
+    {"id": "materials", "name": "动力电池材料", "upstream": [], "terms": ["正极材料", "负极材料", "电解液"], "sv_dimensions": {"strategic": 90, "value_added": 82, "scarcity": 88, "growth": 85}, "expected_firm_count": 3, "gap_profile": "缺本地材料研发和规模化产线"},
+    {"id": "cells", "name": "动力电芯制造", "upstream": ["materials"], "terms": ["动力电芯", "锂离子电芯"], "sv_dimensions": {"strategic": 96, "value_added": 90, "scarcity": 89, "growth": 90}, "expected_firm_count": 2, "gap_profile": "缺高能量密度电芯配套"},
+    {"id": "equipment", "name": "电芯制造设备", "upstream": ["materials"], "terms": ["卷绕设备", "电芯生产设备"], "sv_dimensions": {"strategic": 82, "value_added": 78, "scarcity": 93, "growth": 80}, "expected_firm_count": 2, "gap_profile": "缺本地智能生产装备供应商"},
+    {"id": "charging", "name": "充换电设施", "upstream": ["cells"], "terms": ["充电模块", "充电桩"], "sv_dimensions": {"strategic": 73, "value_added": 68, "scarcity": 70, "growth": 78}, "expected_firm_count": 2, "gap_profile": "缺高功率充电模块"},
+    {"id": "recycling", "name": "电池回收利用", "upstream": ["cells"], "terms": ["电池回收", "梯次利用"], "sv_dimensions": {"strategic": 86, "value_added": 65, "scarcity": 82, "growth": 80}, "expected_firm_count": 2, "gap_profile": "缺闭环梯次利用能力"}
+  ]
+}
